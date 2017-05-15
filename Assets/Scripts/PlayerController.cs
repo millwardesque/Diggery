@@ -2,16 +2,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum PlayerId {
-	Player1 = 0,
-	Player2
-};
-
 [RequireComponent (typeof(Rigidbody2D))]
 public class PlayerController : MonoBehaviour {
 	public float maxSpeed = 1f;
 	public float digPower = 1f;
-	public PlayerId playerId;
+	public int playerId;
+
 	public int health = 10;
 
 	public TreasureFinder treasureFinderPrefab;
@@ -20,21 +16,24 @@ public class PlayerController : MonoBehaviour {
 	Rigidbody2D m_rb;
 	Marker m_currentMarker = null;
 	TreasureFinder m_treasureFinder;
+	Bomb m_currentItem = null;
 
 	void Awake() {
 		m_rb = GetComponent<Rigidbody2D> ();
 		m_treasureFinder = Instantiate<TreasureFinder> (treasureFinderPrefab);
 		m_treasureFinder.transform.localPosition = new Vector2 (1f, 0f);
 		m_treasureFinder.parent = gameObject;
+		m_treasureFinder.State = TreasureFinderState.Enabled;
+		m_treasureFinder.name = "Player " + playerId + " Treasure Finder";
 
 		m_avatar = GetComponentInChildren<SpriteRenderer> ();
 	}
 
 	void Start() {
-		if (playerId == PlayerId.Player1) {
+		if (playerId == 0) {
 			m_avatar.color = new Color (0f, 1f, 0f);
 		}
-		else if (playerId == PlayerId.Player2) {
+		else if (playerId == 1) {
 			m_avatar.color = new Color (1f, 0f, 0f);
 		}
 
@@ -43,7 +42,7 @@ public class PlayerController : MonoBehaviour {
 	void Update () {
 		Vector2 newVelocity = Vector2.zero;
 
-		if (playerId == PlayerId.Player1) {
+		if (playerId == 0) {
 			newVelocity.x = Input.GetAxis ("Horizontal");
 			newVelocity.y = Input.GetAxis ("Vertical");
 
@@ -51,7 +50,7 @@ public class PlayerController : MonoBehaviour {
 				Dig ();
 			}
 
-		} else if (playerId == PlayerId.Player2) {
+		} else if (playerId == 1) {
 			newVelocity.x = Input.GetAxis ("P2-Horizontal");
 			newVelocity.y = Input.GetAxis ("P2-Vertical");
 
@@ -73,25 +72,30 @@ public class PlayerController : MonoBehaviour {
 
 			transform.rotation = Quaternion.Euler (0, 0, rotation);
 		}
-
-		// The treasure finder only works if the player is standing still
-		if (m_rb.velocity.magnitude < Mathf.Epsilon) {
-			m_treasureFinder.State = TreasureFinderState.Enabled;
-		} else {
-			m_treasureFinder.State = TreasureFinderState.Disabled;
-		}
 	}
 
 	void OnTriggerEnter2D(Collider2D col) {
 		if (col.GetComponent<Marker> ()) {
 			m_currentMarker = col.GetComponent<Marker> ();
-			Debug.Log ("[" + name + "] " + "Over marker '" + m_currentMarker.name + "'");
+		} else if (col.GetComponent<Bomb> ()) {
+			Bomb newBomb = col.GetComponent<Bomb> ();
+			if (m_currentItem != newBomb) {
+				if (newBomb.State == BombState.Activated) {
+					newBomb.Detonate ();
+				} else if (newBomb.State == BombState.Deactivated) {
+					if (m_currentItem != null) {
+						m_currentItem.Attach (null);
+					}
+
+					m_currentItem = newBomb;
+					m_currentItem.Attach (this.gameObject);
+				}
+			}
 		}
 	}
 
 	void OnTriggerExit2D(Collider2D col) {
 		if (col.GetComponent<Marker> () && col.GetComponent<Marker>() == m_currentMarker) {
-			Debug.Log ("[" + name + "] " + "Left marker '" + m_currentMarker.name + "'");
 			m_currentMarker = null;
 		}
 	}

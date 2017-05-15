@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-enum BombState {
+public enum BombState {
 	Deactivated,
 	Activated,
 	Detonated,
@@ -16,10 +16,13 @@ public class Bomb : MonoBehaviour {
 	public float explosionRadius = 3f;
 
 	BombState m_state;
-	BombState State {
+	public BombState State {
 		get { return m_state; }
 		set {
 			m_state = value;
+			if (m_state == BombState.Exploded) {
+				Attach (null);
+			}
 		}
 	}
 
@@ -41,18 +44,13 @@ public class Bomb : MonoBehaviour {
 		if (State == BombState.Detonated) {
 			Collider2D[] colliders = Physics2D.OverlapCircleAll (transform.position, explosionRadius);
 			for (int i = 0; i < colliders.Length; ++i) {
-				if (colliders [i] == m_collider) {
+				if (colliders [i] == m_collider || (this.parent != null && colliders[i] == this.parent.GetComponentInChildren<Collider2D>()) || (colliders[i].attachedRigidbody == null)) {
 					continue;
 				}
-	
-				Debug.Log ("Explosion contacts " + colliders [i].name);
+
 				ColliderDistance2D distance = colliders [i].Distance (this.GetComponentInChildren<Collider2D> ());
-				Vector3 direction = (distance.pointA - distance.pointB).normalized;
-
-				Debug.Log("[" + colliders[i].name + "] " + "Distance: " + distance.distance);
-				Debug.Log("[" + colliders[i].name + "] " + "Direction: " + direction);
-
-				float attenuation = 1f - distance.distance / explosionPower;
+				Vector3 direction = (distance.pointA - (Vector2)this.transform.position).normalized;
+				float attenuation = Mathf.Clamp(1f - (distance.distance / explosionRadius), 0f, 1f);
 				colliders [i].attachedRigidbody.AddForceAtPosition(direction * attenuation * explosionPower, distance.pointA, ForceMode2D.Impulse);
 			}
 			State = BombState.Exploded;
@@ -60,11 +58,21 @@ public class Bomb : MonoBehaviour {
 	}
 
 	public void Attach(GameObject parent) {
+		if (State != BombState.Deactivated && parent != null) {
+			return;
+		}
+
 		this.parent = parent;
 
-		Vector3 directionFromParent = transform.position - parent.transform.position;
-		transform.position = parent.transform.position + directionFromParent.normalized * distanceFromParent;
-		State = BombState.Activated;
+		if (parent != null) {
+			transform.SetParent (parent.transform);
+			Vector3 directionFromParent = transform.position - parent.transform.position;
+			transform.position = parent.transform.position + directionFromParent.normalized * distanceFromParent;
+			State = BombState.Activated;
+		} else {
+			transform.SetParent (null);
+			State = BombState.Deactivated;
+		}
 	}
 
 	public void Detonate() {
